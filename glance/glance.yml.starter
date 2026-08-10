@@ -1,0 +1,34 @@
+# glance/glance.yml.starter
+# Seeded into /config/glance.yml on first start. Edit the copy in /config — this
+# bundled file is never read again after the first boot. See:
+# https://github.com/glanceapp/glance/blob/main/docs/configuration.md
+pages:
+  - name: Home
+    columns:
+      - size: small
+        widgets:
+          - type: clock
+            hour-format: 24h
+          - type: weather
+            location: London, United Kingdom
+            units: metric
+      - size: full
+        widgets:
+          - type: rss
+            limit: 10
+            collapse-after: 3
+            cache: 12h
+            feeds:
+              - url: https://www.home-assistant.io/atom.xml
+                title: Home Assistant Blog
+              - url: https://selfh.st/rss/
+                title: selfh.st
+      - size: small
+        widgets:
+          - type: bookmarks
+            groups:
+              - links:
+                  - title: Home Assistant
+                    url: http://homeassistant.local:8123
+                  - title: Glance on GitHub
+                    url: https://github.com/glanceapp/glance
