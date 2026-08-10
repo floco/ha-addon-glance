@@ -36,15 +36,15 @@ Your edits are never overwritten — the starter file is only copied in when
 
 - **Sidebar (Ingress):** enabled by default — a "Glance" entry appears in the Home
   Assistant sidebar, proxied through Home Assistant's own authentication.
-- **Direct port:** also enabled by default, mapped to `8080` — reachable at
-  `http://homeassistant.local:8080` (or your host's address). **Glance has no login
-  of its own**, and this port bypasses Home Assistant's authentication entirely — it
-  is only as safe as your local network. Only useful for kiosks/devices that
-  shouldn't need a Home Assistant login *and* are on a trusted network. If you're
-  going to expose it beyond your LAN (e.g. via port forwarding or a reverse proxy),
-  put an authenticating proxy in front of it yourself. If you don't need this,
-  disable it in the app's **Network** tab and use Ingress only — Ingress is
-  authenticated by Home Assistant and doesn't have this exposure.
+- **Direct port:** off by default (not published), so it doesn't compete with
+  Ingress on the container's port. To enable it, go to the app's **Network** tab and
+  set a host port for `8080/tcp`, then restart the app — it becomes reachable at
+  `http://homeassistant.local:<port>` (or your host's address). **Glance has no
+  login of its own**, and this port bypasses Home Assistant's authentication
+  entirely — it is only as safe as your local network. Only enable it for
+  kiosks/devices that shouldn't need a Home Assistant login *and* are on a trusted
+  network. If you're going to expose it beyond your LAN (e.g. via port forwarding or
+  a reverse proxy), put an authenticating proxy in front of it yourself.
 
 ### A note on Ingress compatibility
 

@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: Glance
-version: "0.8.5-1"
+version: "0.8.5-2"
 slug: glance
 description: A self-hosted, fast, and highly customizable dashboard for all your feeds and widgets.
 url: "https://github.com/floco/ha-addon-glance/tree/main/glance"
@@ -9,11 +9,11 @@ arch:
   - aarch64
 startup: application
 boot: auto
+init: false
 ports:
-  8080/tcp: 8080
+  8080/tcp: null
 ports_description:
-  8080/tcp: Glance web interface
-webui: "http://[HOST]:[PORT:8080]/"
+  8080/tcp: Not required for Ingress. Enable to access Glance directly, bypassing Home Assistant authentication.
 ingress: true
 ingress_port: 8080
 ingress_entry: /
