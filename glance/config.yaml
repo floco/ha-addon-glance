@@ -1,13 +1,12 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: Glance
-version: "0.8.5"
+version: "0.8.5-1"
 slug: glance
 description: A self-hosted, fast, and highly customizable dashboard for all your feeds and widgets.
 url: "https://github.com/floco/ha-addon-glance/tree/main/glance"
 arch:
   - amd64
   - aarch64
-  - armv7
 startup: application
 boot: auto
 ports:
