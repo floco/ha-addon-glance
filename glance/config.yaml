@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: Glance
-version: "0.8.5-3"
+version: "0.8.5-4"
 slug: glance
 description: A self-hosted, fast, and highly customizable dashboard for all your feeds and widgets.
 url: "https://github.com/floco/ha-addon-glance/tree/main/glance"
@@ -18,5 +18,7 @@ ingress: true
 ingress_port: 8080
 map:
   - addon_config:rw
-options: {}
-schema: {}
+options:
+  access_mode: ingress
+schema:
+  access_mode: list(ingress|direct)

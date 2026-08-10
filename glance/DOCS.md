@@ -46,15 +46,26 @@ Your edits are never overwritten — the starter file is only copied in when
   network. If you're going to expose it beyond your LAN (e.g. via port forwarding or
   a reverse proxy), put an authenticating proxy in front of it yourself.
 
-### A note on Ingress compatibility
+### `access_mode`: Ingress and the direct port can't both fully work at once
 
-Home Assistant's Ingress proxy strips its own URL prefix before forwarding requests
-to the app, so most apps that use root-relative paths work under Ingress with no
-extra configuration — which is how this app is set up (no `server.base-url` is
-configured). This hasn't been validated against every part of Glance's UI. If you
-see broken images/styles or a blank page under the sidebar entry, but Glance works
-fine on the direct port, please open an issue on this repository; the fallback is to
-turn Ingress off in the **Network** tab and use the direct port only.
+Glance renders its pages and fetches widget data through a single configured
+"base URL," and it has no way to detect a reverse-proxy prefix per-request. That
+prefix is different depending on how you reach it (nothing under Ingress, vs.
+`/api/hassio_ingress/<token>` under Ingress) — so only *one* access method can be
+fully correct at a time. The other will load an empty/unstyled page (not just
+missing styling — its widgets won't fetch data either).
+
+The `access_mode` option (in the app's **Configuration** tab) picks which one:
+
+- **`ingress`** (default): the sidebar entry works correctly. The direct port, if
+  you've also enabled it, will show a broken/empty page.
+- **`direct`**: the direct port works correctly. The sidebar entry will show a
+  broken/empty page.
+
+Change it, save, and **restart the app** for it to take effect. Under the hood,
+`entrypoint.sh` asks Home Assistant's Supervisor for this installation's Ingress
+path (via the standard per-app Supervisor API token — no extra permissions needed)
+and passes it to Glance as `server.base-url`, or leaves it empty for `direct` mode.
 
 ## Updating
 

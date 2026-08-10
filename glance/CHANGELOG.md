@@ -1,4 +1,24 @@
 <!-- https://developers.home-assistant.io/docs/apps/presentation#keeping-a-changelog -->
+## 0.8.5-4
+
+- Fix Ingress loading an empty/unstyled page even after `v0.8.5-3`'s redirect fix.
+  Root cause: Glance references its CSS/JS/asset URLs with absolute paths
+  (`/static/...`) and has no ingress-awareness of its own (doesn't read
+  `X-Ingress-Path`/`X-Forwarded-Prefix`), so those requests escaped the
+  ingress-prefixed path entirely once the redirect bug was no longer masking it.
+  Glance does support a `server.base-url` setting for exactly this, but it's a
+  single static value — it can't be simultaneously correct for both Ingress and
+  the direct port, since Glance can't detect its access path per-request.
+  Added a new `access_mode` app option (`ingress` default, or `direct`);
+  `entrypoint.sh` now asks Supervisor for this installation's Ingress path (via
+  `GET /apps/self/info` using the app's own Supervisor token — no extra
+  permissions required) and passes it to Glance as `server.base-url` when
+  `access_mode: ingress`, or leaves it empty for `access_mode: direct`. Whichever
+  mode isn't active will show a broken/empty page — see DOCS.md. Existing
+  `/config/glance.yml` files (from before this fix) are migrated in place on next
+  start to add the required `server:` block, without touching anything else in
+  the file.
+
 ## 0.8.5-3
 
 - Fix the actual Ingress bug: remove the explicit `ingress_entry: /` key.

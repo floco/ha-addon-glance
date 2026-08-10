@@ -2,6 +2,11 @@
 # Seeded into /config/glance.yml on first start. Edit the copy in /config — this
 # bundled file is never read again after the first boot. See:
 # https://github.com/glanceapp/glance/blob/main/docs/configuration.md
+#
+# server.base-url is set dynamically by entrypoint.sh on every start, based on the
+# access_mode app option — do not hardcode a value here. See DOCS.md.
+server:
+  base-url: ${GLANCE_BASE_URL}
 pages:
   - name: Home
     columns:
