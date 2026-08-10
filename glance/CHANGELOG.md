@@ -1,4 +1,20 @@
 <!-- https://developers.home-assistant.io/docs/apps/presentation#keeping-a-changelog -->
+## 0.8.5-3
+
+- Fix the actual Ingress bug: remove the explicit `ingress_entry: /` key.
+  Supervisor only concatenates `ingress_entry` onto the ingress base URL
+  (`/api/hassio_ingress/<token>/`) when the key is *present at all* in
+  config.yaml — it doesn't matter that `/` is the documented default when
+  the key is absent. With the key present, the request path ended in a
+  doubled slash (`.../<token>//`), which triggered Glance's own
+  double-slash-canonicalization redirect (`307` to `/`, a *relative*
+  Location header). Under Ingress, the browser resolves that relative
+  redirect against Home Assistant's own origin, not the ingress-prefixed
+  path — landing back on the HA dashboard instead of Glance. Confirmed by
+  reading Supervisor's `ingress_url` property directly (`apps/app.py`) and
+  reproducing the redirect locally. `v0.8.5-2`'s `ports`/`init` change was a
+  real improvement worth keeping, but did not address this.
+
 ## 0.8.5-2
 
 - Fix Ingress not routing to the container. `ports: 8080/tcp` was published
