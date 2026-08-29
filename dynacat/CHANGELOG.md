@@ -1,4 +1,18 @@
 <!-- https://developers.home-assistant.io/docs/apps/presentation#keeping-a-changelog -->
+## 2.4.0-1
+
+- Replace Glance with [Dynacat](https://github.com/Panonim/dynacat) `2.4.0`, a fork
+  of Glance focused on dynamic reloading and easy integration with external
+  applications. This app's slug changes from `glance` to `dynacat`, so Home
+  Assistant treats it as a new app install rather than an in-place upgrade — your
+  old Glance app and its `glance.yml` are untouched; a fresh `dynacat.yml` starter
+  dashboard is seeded on Dynacat's first start. Config filename changes from
+  `glance.yml` to `dynacat.yml` and the binary from `glance` to `dynacat`, but the
+  `server.base-url` mechanism and `access_mode` option work identically — Dynacat
+  kept the same `${VAR}` config substitution and `server.base-url` setting Glance
+  has. All entries below this one describe the packaging history while this app
+  still ran Glance.
+
 ## 0.8.5-4
 
 - Fix Ingress loading an empty/unstyled page even after `v0.8.5-3`'s redirect fix.

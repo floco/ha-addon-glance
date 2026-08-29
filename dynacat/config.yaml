@@ -1,0 +1,24 @@
+# https://developers.home-assistant.io/docs/apps/configuration#app-configuration
+name: Dynacat
+version: "2.4.0-1"
+slug: dynacat
+description: A self-hosted dashboard focused on dynamic reloading and easy integration with external applications, forked from Glance.
+url: "https://github.com/floco/ha-addon-glance/tree/main/dynacat"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+ports:
+  8080/tcp: null
+ports_description:
+  8080/tcp: Not required for Ingress. Enable to access Dynacat directly, bypassing Home Assistant authentication.
+ingress: true
+ingress_port: 8080
+map:
+  - addon_config:rw
+options:
+  access_mode: ingress
+schema:
+  access_mode: list(ingress|direct)
