@@ -1,4 +1,9 @@
 <!-- https://developers.home-assistant.io/docs/apps/presentation#keeping-a-changelog -->
+## 2.4.0-2
+
+- Set `panel_icon: mdi:cat` so the Home Assistant sidebar entry shows a cat icon
+  matching Dynacat's branding, instead of the default `mdi:puzzle`.
+
 ## 2.4.0-1
 
 - Replace Glance with [Dynacat](https://github.com/Panonim/dynacat) `2.4.0`, a fork
