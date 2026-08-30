@@ -69,28 +69,25 @@ Change it, save, and **restart the app** for it to take effect. Under the hood,
 path (via the standard per-app Supervisor API token — no extra permissions needed)
 and passes it to Dynacat as `server.base-url`, or leaves it empty for `direct` mode.
 
-### Search widget: some search engines show a black screen under Ingress
+### Search widget: `new-tab: true` is required under Ingress, for every engine
 
-If you add a `search` widget and search, the sidebar panel can go blank/black when
-the results come back — this happens with Google specifically, not with the
-default DuckDuckGo engine.
+If you add a `search` widget, the sidebar panel goes blank/black when the results
+come back — for every search engine, not just some of them.
 
 The search widget's `new-tab` option defaults to `false`, so a plain search
 navigates the *current frame* to the results page (`window.location.href`). Under
 Ingress, that current frame is the `<iframe>` Home Assistant renders the sidebar
-panel in. Google's search results send anti-framing headers
-(`X-Frame-Options`/CSP `frame-ancestors`) that block browsers from rendering them
-inside someone else's iframe, so the panel just goes blank. DuckDuckGo doesn't send
-those headers, which is why it works by default and Google doesn't. (This is a
-site-specific behavior, not a Dynacat or packaging bug — it also wouldn't happen
-under `access_mode: direct`, since there's no iframe there.)
+panel in, and navigating it to any external site goes black. This isn't specific to
+a particular search engine's own headers — it happens across the board. (It also
+wouldn't happen under `access_mode: direct`, since there's no iframe there.)
 
-Fix it in your `dynacat.yml` by opening results in a real new tab instead, which
-escapes the iframe entirely:
+The fix: always set `new-tab: true` on the search widget when running under
+Ingress, regardless of which engine you use. This opens results in a real new tab
+instead, which escapes the iframe entirely:
 
 ```yaml
 - type: search
-  search-engine: google
+  search-engine: duckduckgo # or any other engine
   new-tab: true
 ```
 
