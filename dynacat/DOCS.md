@@ -3,7 +3,7 @@
 ## What this is
 
 This app runs the official [Dynacat](https://github.com/Panonim/dynacat) Docker
-image (currently pinned to `2.4.0`) unmodified, and wires it into Home Assistant's
+image (currently pinned to `3.0.0`) unmodified, and wires it into Home Assistant's
 app system: persistent configuration storage, an optional sidebar entry via Ingress,
 and an optional direct port. Dynacat is a fork of
 [Glance](https://github.com/glanceapp/glance) focused on dynamic reloading and easy
@@ -33,6 +33,36 @@ The easiest way to edit it:
 
 Your edits are never overwritten — the starter file is only copied in when
 `dynacat.yml` doesn't exist yet.
+
+### The built-in web UI editor, and why the sidebar entry is admin-only
+
+Since `3.0.0`, Dynacat ships its own in-browser editor for pages/widgets that writes
+straight to `dynacat.yml`, and it's enabled out of the box
+(`server.allow-editing: true`). Dynacat has no concept of individual Home Assistant
+users — it can't tell an admin from a guest — so there's no way to make the
+dashboard viewable by everyone while restricting only the *editor* to admins; the
+only lever Dynacat has (`server.editing-users`/`editing-groups`) requires Dynacat's
+own separate login (`auth.users`/OIDC), which this app deliberately doesn't
+configure (see "Dynacat has no login of its own" below).
+
+Instead, this app sets `panel_admin: true` in `config.yaml`, which is enforced by
+Home Assistant Supervisor itself: the whole sidebar (Ingress) entry — viewing and
+editing alike — is restricted to admin accounts. Non-admin users won't see or be
+able to open the "Dynacat" sidebar item at all.
+
+This only applies to the **sidebar/Ingress** route. The direct port, if you enable
+it, still bypasses Home Assistant authentication entirely — see the warning below —
+so anyone who can reach it can view *and* edit the dashboard regardless of
+`panel_admin`.
+
+If you'd rather everyone (not just admins) can view the dashboard and only disable
+the editor for all users instead, add this to `dynacat.yml`, restart the app, and
+remove `panel_admin: true` from the app's config yourself:
+
+```yaml
+server:
+  allow-editing: false
+```
 
 ## Accessing Dynacat
 

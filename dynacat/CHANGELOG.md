@@ -1,4 +1,20 @@
 <!-- https://developers.home-assistant.io/docs/apps/presentation#keeping-a-changelog -->
+## 3.0.0-1
+
+- Upgrade packaged Dynacat from `2.4.0` to `3.0.0`. No changes were needed to
+  `entrypoint.sh` or `dynacat.yml.starter` — the Dockerfile, config file location,
+  `--config` flag, and the `clock`/`weather`/`rss`/`bookmarks` widgets used by the
+  starter dashboard are all unchanged between the two versions.
+- Note: `3.0.0` adds a built-in web UI editor that writes directly to `dynacat.yml`,
+  enabled by default (`server.allow-editing: true`). Left on at Dynacat's default —
+  Dynacat has no concept of Home Assistant users, so it can't scope the editor to
+  admins on its own.
+- Set `panel_admin: true` so the whole sidebar (Ingress) app, viewing and editing
+  alike, is restricted to Home Assistant admin accounts, enforced by Supervisor.
+  Non-admin users no longer see the "Dynacat" sidebar entry. Does not affect the
+  direct port, which already bypasses Home Assistant authentication entirely — see
+  DOCS.md.
+
 ## 2.4.0-2
 
 - Set `panel_icon: mdi:cat` so the Home Assistant sidebar entry shows a cat icon
