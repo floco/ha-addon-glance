@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: Dynacat
-version: "3.0.0-1"
+version: "3.0.2-1"
 slug: dynacat
 description: A self-hosted dashboard focused on dynamic reloading and easy integration with external applications, forked from Glance.
 url: "https://github.com/floco/ha-addon-glance/tree/main/dynacat"

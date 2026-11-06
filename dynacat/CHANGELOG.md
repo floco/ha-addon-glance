@@ -1,4 +1,17 @@
 <!-- https://developers.home-assistant.io/docs/apps/presentation#keeping-a-changelog -->
+## 3.0.2-1
+
+- Upgrade packaged Dynacat from `3.0.0` to `3.0.2` (covers `3.0.1` too). No changes
+  needed to `entrypoint.sh`, `dynacat.yml.starter`, or `panel_admin: true` — nothing
+  in this app's startup, config substitution, or widget usage changed. Mainly widget
+  fixes/additions (Reddit `403`s, Pi-hole v6, `home-assistant` and `node-exporter`
+  support, a `bookmarks` grid style) and security hardening (cookie attributes,
+  search-widget suggestion URL, output escaping).
+- Note: `3.0.2` adds `EDITOR_REQUIRE_LOGIN` to require a login for the web UI editor,
+  but it only takes effect when Dynacat's own `auth:` is configured, which this app
+  deliberately doesn't do — it has no effect here. `panel_admin: true` (see `3.0.0-1`
+  below) remains the only thing restricting the editor to admins.
+
 ## 3.0.0-1
 
 - Upgrade packaged Dynacat from `2.4.0` to `3.0.0`. No changes were needed to

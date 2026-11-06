@@ -5,7 +5,7 @@
 # not from a Home Assistant base image — so no s6-overlay/bashio are available here.
 # First-boot config seeding + startup is handled by entrypoint.sh instead of the
 # rootfs/etc/services.d s6 pattern used by apps built on HA base images.
-FROM ghcr.io/panonim/dynacat:3.0.0
+FROM ghcr.io/panonim/dynacat:3.0.2
 
 ARG BUILD_VERSION
 ARG BUILD_ARCH

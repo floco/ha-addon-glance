@@ -26,7 +26,7 @@ See [dynacat/DOCS.md](./dynacat/DOCS.md) for configuration details, and
 
 A self-hosted dashboard that puts all your feeds in one place, with dynamic
 reloading and easy integration with external applications. Runs the official
-`ghcr.io/panonim/dynacat` image unmodified, pinned to `3.0.0`.
+`ghcr.io/panonim/dynacat` image unmodified, pinned to `3.0.2`.
 
 ## License
 

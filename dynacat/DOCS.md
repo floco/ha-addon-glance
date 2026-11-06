@@ -3,7 +3,7 @@
 ## What this is
 
 This app runs the official [Dynacat](https://github.com/Panonim/dynacat) Docker
-image (currently pinned to `3.0.0`) unmodified, and wires it into Home Assistant's
+image (currently pinned to `3.0.2`) unmodified, and wires it into Home Assistant's
 app system: persistent configuration storage, an optional sidebar entry via Ingress,
 and an optional direct port. Dynacat is a fork of
 [Glance](https://github.com/glanceapp/glance) focused on dynamic reloading and easy
