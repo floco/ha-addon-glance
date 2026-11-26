@@ -13,10 +13,25 @@ name: Sync Dynacat version bump
 # `contents`/`pull-requests` permissions -- GitHub forces those to read-only
 # on pull_request events triggered by Dependabot.
 #
+# This job has write access to main and merges PRs on its own, so the PR it
+# acts on cannot be trusted by branch name alone -- a PR from any fork can use
+# any headRefName it likes. "Find the open Dynacat Dependabot PR" below
+# requires the PR to actually be authored by dependabot[bot] and to live in
+# this repo (not a fork). "Verify the PR only bumps the pinned version" then
+# independently re-derives that from the PR's own content before anything
+# downstream trusts it: the changed-file list must be exactly
+# dynacat/Dockerfile, the new version must match ^[0-9]+\.[0-9]+\.[0-9]+$, and
+# the file's content must be byte-for-byte identical to main's Dockerfile with
+# only that version substituted -- so a PR that smuggles in any other change,
+# to that file or any other, fails closed (the step exits 1, which stops the
+# whole job -- no merge, no comment, just a failed run for a human to notice).
+# The upstream-diff review after that can also fail closed (tags missing,
+# clone/diff errors), but takes the gentler "comment and leave open" path,
+# since touching a file this addon depends on is an expected, non-hostile
+# outcome of a real release, not a sign the PR was tampered with.
+#
 # All `${{ steps.*.outputs.* }}` values are passed into scripts via `env:` and
-# read back as `$VAR`, never interpolated directly into `run:` bodies, even
-# though none of them are attacker-supplied free text (PR numbers, versions
-# matched by a `[0-9.]+` regex, and file paths drawn from a fixed list).
+# read back as `$VAR`, never interpolated directly into `run:` bodies.
 
 on:
   schedule:
@@ -45,8 +60,13 @@ jobs:
         id: find_pr
         run: |
           set -euo pipefail
-          PR_JSON=$(gh pr list --state open --json number,headRefName \
-            --jq '[.[] | select(.headRefName | startswith("dependabot/docker/dynacat/"))][0]')
+          PR_JSON=$(gh pr list --state open \
+            --json number,headRefName,author,isCrossRepository,headRefOid \
+            --jq '[.[]
+              | select(.headRefName | startswith("dependabot/docker/dynacat/"))
+              | select(.author.login == "dependabot[bot]")
+              | select(.isCrossRepository == false)
+            ][0]')
           if [ "$PR_JSON" = "null" ] || [ -z "$PR_JSON" ]; then
             echo "No open Dynacat Dependabot PR found, nothing to do."
             echo "found=false" >> "$GITHUB_OUTPUT"
@@ -54,6 +74,7 @@ jobs:
           fi
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "number=$(echo "$PR_JSON" | jq -r .number)" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(echo "$PR_JSON" | jq -r .headRefOid)" >> "$GITHUB_OUTPUT"
 
       - name: Read the currently pinned version (main)
         if: steps.find_pr.outputs.found == 'true'
@@ -62,19 +83,55 @@ jobs:
           set -euo pipefail
           DOCKERFILE_VERSION=$(grep -oP 'ghcr\.io/panonim/dynacat:\K[0-9.]+' dynacat/Dockerfile | head -n1)
           CONFIG_VERSION=$(grep -oP 'version:\s*"\K[0-9.]+(?=-)' dynacat/config.yaml | head -n1)
+          for v in "$DOCKERFILE_VERSION" "$CONFIG_VERSION"; do
+            if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Pinned version '$v' on main doesn't look like X.Y.Z" >&2
+              exit 1
+            fi
+          done
           echo "dockerfile=$DOCKERFILE_VERSION" >> "$GITHUB_OUTPUT"
           echo "config=$CONFIG_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check out the PR branch and read the new version
+      - name: Verify the PR only bumps the pinned version
         if: steps.find_pr.outputs.found == 'true'
-        id: new_version
+        id: verify_pr
         env:
           PR_NUMBER: ${{ steps.find_pr.outputs.number }}
+          LISTED_HEAD_SHA: ${{ steps.find_pr.outputs.head_sha }}
+          OLD_DOCKERFILE: ${{ steps.old_version.outputs.dockerfile }}
         run: |
           set -euo pipefail
+
           gh pr checkout "$PR_NUMBER"
-          VERSION=$(grep -oP 'ghcr\.io/panonim/dynacat:\K[0-9.]+' dynacat/Dockerfile | head -n1)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          CURRENT_SHA=$(git rev-parse HEAD)
+          if [ "$CURRENT_SHA" != "$LISTED_HEAD_SHA" ]; then
+            echo "::error::PR head moved between listing and checkout ($LISTED_HEAD_SHA -> $CURRENT_SHA), aborting" >&2
+            exit 1
+          fi
+
+          CHANGED_FILES=$(gh pr diff "$PR_NUMBER" --name-only)
+          if [ "$CHANGED_FILES" != "dynacat/Dockerfile" ]; then
+            echo "::error::PR changes more than dynacat/Dockerfile: $CHANGED_FILES" >&2
+            exit 1
+          fi
+
+          NEW=$(grep -oP 'ghcr\.io/panonim/dynacat:\K[0-9.]+' dynacat/Dockerfile | head -n1)
+          if ! [[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::New version '$NEW' doesn't look like X.Y.Z" >&2
+            exit 1
+          fi
+
+          OLD_PATTERN=$(printf '%s' "$OLD_DOCKERFILE" | sed 's/\./\\./g')
+          EXPECTED=$(git show main:dynacat/Dockerfile | sed "s/${OLD_PATTERN}/${NEW}/")
+          ACTUAL=$(cat dynacat/Dockerfile)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::dynacat/Dockerfile differs from main by more than the version tag" >&2
+            exit 1
+          fi
+
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$CURRENT_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Review upstream diff for anything this addon depends on
         if: steps.find_pr.outputs.found == 'true'
@@ -82,24 +139,31 @@ jobs:
         env:
           OLD_DOCKERFILE: ${{ steps.old_version.outputs.dockerfile }}
           OLD_CONFIG: ${{ steps.old_version.outputs.config }}
-          NEW: ${{ steps.new_version.outputs.version }}
+          NEW: ${{ steps.verify_pr.outputs.version }}
         run: |
           set -euo pipefail
 
           CLONE_DIR=$(mktemp -d)
           git clone --quiet https://github.com/Panonim/dynacat.git "$CLONE_DIR"
 
-          RISK_PATHS="Dockerfile internal/dynacat/config.go internal/dynacat/widget-clock.go internal/dynacat/widget-weather.go internal/dynacat/widget-rss.go internal/dynacat/widget-bookmarks.go"
-          CHANGED=$(git -C "$CLONE_DIR" diff --name-only "$OLD_DOCKERFILE" "$NEW" -- $RISK_PATHS || true)
-
           SAFE=true
           REASON=""
           if [ "$OLD_DOCKERFILE" != "$OLD_CONFIG" ]; then
             SAFE=false
             REASON="dynacat/config.yaml ($OLD_CONFIG) and dynacat/Dockerfile ($OLD_DOCKERFILE) were already out of sync on main before this upgrade."
-          elif [ -n "$CHANGED" ]; then
+          elif ! git -C "$CLONE_DIR" rev-parse --verify --quiet "refs/tags/${OLD_DOCKERFILE}^{commit}" >/dev/null \
+            || ! git -C "$CLONE_DIR" rev-parse --verify --quiet "refs/tags/${NEW}^{commit}" >/dev/null; then
             SAFE=false
-            REASON="Changed upstream between $OLD_DOCKERFILE and $NEW: $(echo "$CHANGED" | tr '\n' ' ')"
+            REASON="Could not find tag $OLD_DOCKERFILE and/or $NEW in Panonim/dynacat upstream."
+          else
+            RISK_PATHS="Dockerfile internal/dynacat/config.go internal/dynacat/widget-clock.go internal/dynacat/widget-weather.go internal/dynacat/widget-rss.go internal/dynacat/widget-bookmarks.go"
+            if ! CHANGED=$(git -C "$CLONE_DIR" diff --name-only "$OLD_DOCKERFILE" "$NEW" -- $RISK_PATHS); then
+              SAFE=false
+              REASON="Failed to diff upstream tags $OLD_DOCKERFILE..$NEW."
+            elif [ -n "$CHANGED" ]; then
+              SAFE=false
+              REASON="Changed upstream between $OLD_DOCKERFILE and $NEW: $(echo "$CHANGED" | tr '\n' ' ')"
+            fi
           fi
 
           echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
@@ -113,7 +177,7 @@ jobs:
         if: steps.find_pr.outputs.found == 'true' && steps.review.outputs.safe == 'true'
         env:
           OLD: ${{ steps.old_version.outputs.dockerfile }}
-          NEW: ${{ steps.new_version.outputs.version }}
+          NEW: ${{ steps.verify_pr.outputs.version }}
           PR_NUMBER: ${{ steps.find_pr.outputs.number }}
         run: |
           set -euo pipefail
@@ -146,13 +210,14 @@ jobs:
           git diff --cached --quiet || git commit -m "Sync version references for Dynacat ${NEW}"
           git push
 
-          gh pr merge "$PR_NUMBER" --squash --delete-branch
+          MERGED_SHA=$(git rev-parse HEAD)
+          gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$MERGED_SHA"
 
       - name: Leave the PR for manual review
         if: steps.find_pr.outputs.found == 'true' && steps.review.outputs.safe == 'false'
         env:
           OLD: ${{ steps.old_version.outputs.dockerfile }}
-          NEW: ${{ steps.new_version.outputs.version }}
+          NEW: ${{ steps.verify_pr.outputs.version }}
           PR_NUMBER: ${{ steps.find_pr.outputs.number }}
           REASON: ${{ steps.review.outputs.reason }}
         run: |
