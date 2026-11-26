@@ -1,0 +1,165 @@
+name: Sync Dynacat version bump
+
+# Dependabot (.github/dependabot.yml) opens a PR bumping dynacat/Dockerfile's
+# FROM tag whenever a new ghcr.io/panonim/dynacat release appears, but it only
+# touches that one line. This workflow finds that PR, propagates the version
+# into dynacat/config.yaml, the READMEs, and DOCS.md, writes a CHANGELOG.md
+# entry, and auto-merges it -- but only when the new release doesn't touch any
+# of the upstream files this addon has previously needed a human judgment call
+# on (see CHANGELOG.md's 3.0.0-1/3.0.2-1 entries for the precedent). Otherwise
+# it leaves a comment explaining what to check and does not merge.
+#
+# Runs on a schedule rather than `pull_request` so it always gets full
+# `contents`/`pull-requests` permissions -- GitHub forces those to read-only
+# on pull_request events triggered by Dependabot.
+#
+# All `${{ steps.*.outputs.* }}` values are passed into scripts via `env:` and
+# read back as `$VAR`, never interpolated directly into `run:` bodies, even
+# though none of them are attacker-supplied free text (PR numbers, versions
+# matched by a `[0-9.]+` regex, and file paths drawn from a fixed list).
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find the open Dynacat Dependabot PR
+        id: find_pr
+        run: |
+          set -euo pipefail
+          PR_JSON=$(gh pr list --state open --json number,headRefName \
+            --jq '[.[] | select(.headRefName | startswith("dependabot/docker/dynacat/"))][0]')
+          if [ "$PR_JSON" = "null" ] || [ -z "$PR_JSON" ]; then
+            echo "No open Dynacat Dependabot PR found, nothing to do."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "number=$(echo "$PR_JSON" | jq -r .number)" >> "$GITHUB_OUTPUT"
+
+      - name: Read the currently pinned version (main)
+        if: steps.find_pr.outputs.found == 'true'
+        id: old_version
+        run: |
+          set -euo pipefail
+          DOCKERFILE_VERSION=$(grep -oP 'ghcr\.io/panonim/dynacat:\K[0-9.]+' dynacat/Dockerfile | head -n1)
+          CONFIG_VERSION=$(grep -oP 'version:\s*"\K[0-9.]+(?=-)' dynacat/config.yaml | head -n1)
+          echo "dockerfile=$DOCKERFILE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "config=$CONFIG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the PR branch and read the new version
+        if: steps.find_pr.outputs.found == 'true'
+        id: new_version
+        env:
+          PR_NUMBER: ${{ steps.find_pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          gh pr checkout "$PR_NUMBER"
+          VERSION=$(grep -oP 'ghcr\.io/panonim/dynacat:\K[0-9.]+' dynacat/Dockerfile | head -n1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Review upstream diff for anything this addon depends on
+        if: steps.find_pr.outputs.found == 'true'
+        id: review
+        env:
+          OLD_DOCKERFILE: ${{ steps.old_version.outputs.dockerfile }}
+          OLD_CONFIG: ${{ steps.old_version.outputs.config }}
+          NEW: ${{ steps.new_version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          CLONE_DIR=$(mktemp -d)
+          git clone --quiet https://github.com/Panonim/dynacat.git "$CLONE_DIR"
+
+          RISK_PATHS="Dockerfile internal/dynacat/config.go internal/dynacat/widget-clock.go internal/dynacat/widget-weather.go internal/dynacat/widget-rss.go internal/dynacat/widget-bookmarks.go"
+          CHANGED=$(git -C "$CLONE_DIR" diff --name-only "$OLD_DOCKERFILE" "$NEW" -- $RISK_PATHS || true)
+
+          SAFE=true
+          REASON=""
+          if [ "$OLD_DOCKERFILE" != "$OLD_CONFIG" ]; then
+            SAFE=false
+            REASON="dynacat/config.yaml ($OLD_CONFIG) and dynacat/Dockerfile ($OLD_DOCKERFILE) were already out of sync on main before this upgrade."
+          elif [ -n "$CHANGED" ]; then
+            SAFE=false
+            REASON="Changed upstream between $OLD_DOCKERFILE and $NEW: $(echo "$CHANGED" | tr '\n' ' ')"
+          fi
+
+          echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
+          {
+            echo "reason<<REASON_EOF"
+            echo "$REASON"
+            echo "REASON_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply the version sync and merge
+        if: steps.find_pr.outputs.found == 'true' && steps.review.outputs.safe == 'true'
+        env:
+          OLD: ${{ steps.old_version.outputs.dockerfile }}
+          NEW: ${{ steps.new_version.outputs.version }}
+          PR_NUMBER: ${{ steps.find_pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          NEW_FULL="${NEW}-1"
+          COMPARE_URL="https://github.com/Panonim/dynacat/compare/${OLD}...${NEW}"
+          OLD_PATTERN=$(printf '%s' "$OLD" | sed 's/\./\\./g')
+
+          sed -i "s/${OLD_PATTERN}/${NEW}/g" README.md dynacat/README.md dynacat/DOCS.md
+          sed -i "s/^version: \".*\"/version: \"${NEW_FULL}\"/" dynacat/config.yaml
+
+          {
+            head -n 1 dynacat/CHANGELOG.md
+            echo "## ${NEW_FULL}"
+            echo
+            echo "- Upgrade packaged Dynacat from \`${OLD}\` to \`${NEW}\` (automated by"
+            echo "  \`.github/workflows/dynacat-sync.yml\`). No changes were detected upstream in"
+            echo "  the Dockerfile's final stage, the \`server.base-url\`/\${VAR} substitution"
+            echo "  mechanism (\`internal/dynacat/config.go\`), or the"
+            echo "  \`clock\`/\`weather\`/\`rss\`/\`bookmarks\` widgets used by \`dynacat.yml.starter\`,"
+            echo "  so this was auto-merged without manual review. Upstream changes:"
+            echo "  ${COMPARE_URL}"
+            echo
+            tail -n +2 dynacat/CHANGELOG.md
+          } > dynacat/CHANGELOG.md.new
+          mv dynacat/CHANGELOG.md.new dynacat/CHANGELOG.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md dynacat/README.md dynacat/DOCS.md dynacat/config.yaml dynacat/CHANGELOG.md
+          git diff --cached --quiet || git commit -m "Sync version references for Dynacat ${NEW}"
+          git push
+
+          gh pr merge "$PR_NUMBER" --squash --delete-branch
+
+      - name: Leave the PR for manual review
+        if: steps.find_pr.outputs.found == 'true' && steps.review.outputs.safe == 'false'
+        env:
+          OLD: ${{ steps.old_version.outputs.dockerfile }}
+          NEW: ${{ steps.new_version.outputs.version }}
+          PR_NUMBER: ${{ steps.find_pr.outputs.number }}
+          REASON: ${{ steps.review.outputs.reason }}
+        run: |
+          set -euo pipefail
+          BODY="This upgrade (\`${OLD}\` → \`${NEW}\`) was **not** auto-merged.
+
+          ${REASON}
+
+          Review for breaking changes to the Dockerfile's final stage, the \`server.base-url\` substitution mechanism, or the \`clock\`/\`weather\`/\`rss\`/\`bookmarks\` widgets in \`dynacat.yml.starter\` -- the same checks prior Dynacat upgrades in this repo made by hand (see \`dynacat/CHANGELOG.md\`'s \`3.0.0-1\`/\`3.0.2-1\` entries for precedent). If it's safe, finish this PR manually: bump \`dynacat/config.yaml\`, the pinned-version mentions in the READMEs/DOCS.md, add a CHANGELOG.md entry, then merge."
+          gh pr comment "$PR_NUMBER" --body "$BODY"

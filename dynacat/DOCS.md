@@ -123,9 +123,16 @@ instead, which escapes the iframe entirely:
 
 ## Updating
 
-This app is pinned to a specific Dynacat release (see `CHANGELOG.md`). New Dynacat
-versions are picked up deliberately — check this repository's releases and update
-the app the same way you'd update any other Home Assistant app.
+This app is pinned to a specific Dynacat release (see `CHANGELOG.md`). New stable
+Dynacat releases are picked up automatically: Dependabot opens a PR bumping
+`dynacat/Dockerfile`, and `.github/workflows/dynacat-sync.yml` syncs the version
+into `config.yaml`/the READMEs/`DOCS.md`, writes a `CHANGELOG.md` entry, and merges
+it on its own — but only when the new release doesn't touch the Dockerfile's final
+stage, the `server.base-url` substitution mechanism, or the `clock`/`weather`/`rss`/
+`bookmarks` widgets used by `dynacat.yml.starter`. Otherwise it leaves a comment on
+the PR explaining what to review instead of merging automatically. Either way,
+update the app in Home Assistant the same way you'd update any other app once a new
+version lands on `main`.
 
 ## Support
 
